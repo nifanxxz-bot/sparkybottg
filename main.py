@@ -21,17 +21,16 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 # Конфигурация ссылок
 SOCIAL_LINKS = {
     "website": "http://sparky-b6d71.web.app",
-    "instagram": "https://instagram.com/your_profile", # Вернули инстаграм на место! Замените на свой профиль
+    "instagram": "https://instagram.com/your_profile", # Замените на вашу ссылку
     "telegram_channel": "https://t.me/sparky_industry",
     "tiktok": "https://tiktok.com",          
     "youtube": "https://youtube.com",        
-    # Прямая команда для Telegram открыть почтовое приложение без сайтов-прокладок
-    "support": "supportsparkyai@gmail.com", 
+    "support_email": "supportsparkyai@gmail.com", 
 }
 
 
 def get_main_keyboard():
-    """Главное меню с красивыми кнопками"""
+    """Главное меню с исправленной кнопкой поддержки"""
     keyboard = [
         [
             InlineKeyboardButton("ℹ️ О нас", callback_data="about"),
@@ -39,14 +38,15 @@ def get_main_keyboard():
         ],
         [
             InlineKeyboardButton("📱 Наши соц. сети", callback_data="socials"),
-            InlineKeyboardButton("💬 Поддержка", url=SOCIAL_LINKS["support"]),
+            # ИСПРАВЛЕНО: строго callback_data без параметра url
+            InlineKeyboardButton("💬 Поддержка", callback_data="support_info"), 
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_socials_keyboard():
-    """Клавиатура соцсетей (Инстаграм снова в строю)"""
+    """Клавиатура соцсетей"""
     keyboard = [
         [
             InlineKeyboardButton("📷 Instagram", url=SOCIAL_LINKS["instagram"]),
@@ -154,6 +154,31 @@ async def socials_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 
+async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик кнопки 'Поддержка' — вывод информации о Gmail"""
+    query = update.callback_query
+    await query.answer()
+    
+    support_text = f"""
+<b>💬 Связь с поддержкой</b>
+
+Вы можете написать нам на электронную почту Gmail. 
+
+Нажмите на адрес ниже, чтобы быстро скопировать его:
+➡️ <code>{SOCIAL_LINKS['support_email']}</code>
+
+Попробуйте открыть приложение почты напрямую:
+👉 <a href="mailto:{SOCIAL_LINKS['support_email']}">Написать письмо в Gmail</a>
+"""
+    
+    await query.edit_message_text(
+        support_text,
+        reply_markup=get_back_keyboard(),
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
+
+
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Возврат в главное меню"""
     query = update.callback_query
@@ -223,6 +248,7 @@ def main() -> None:
     # Callback кнопки
     application.add_handler(CallbackQueryHandler(about_callback, pattern="^about$"))
     application.add_handler(CallbackQueryHandler(socials_callback, pattern="^socials$"))
+    application.add_handler(CallbackQueryHandler(support_callback, pattern="^support_info$"))
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))
     
     logger.info("Бот запущен!")
