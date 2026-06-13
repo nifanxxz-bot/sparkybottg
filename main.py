@@ -14,23 +14,24 @@ load_dotenv()
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-logger = __name__
+logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Конфигурация ссылок
-# Используем веб-редирект для почты, чтобы Telegram пропускал ссылку и открывал почтовый клиент у пользователя
 SOCIAL_LINKS = {
     "website": "http://sparky-b6d71.web.app",
+    "instagram": "https://instagram.com/your_profile", # Вернули инстаграм на место! Замените на свой профиль
     "telegram_channel": "https://t.me/sparky_industry",
     "tiktok": "https://tiktok.com",          
     "youtube": "https://youtube.com",        
-    "support": "https://mailgo.dev/mailto/supportsparkyai@gmail.com", # Теперь это валидный HTTPS URL!
+    # Прямая команда для Telegram открыть почтовое приложение без сайтов-прокладок
+    "support": "tg://msg_url?url=mailto:supportsparkyai@gmail.com", 
 }
 
 
 def get_main_keyboard():
-    """Главное меню с кнопкой Поддержки (Email)"""
+    """Главное меню с красивыми кнопками"""
     keyboard = [
         [
             InlineKeyboardButton("ℹ️ О нас", callback_data="about"),
@@ -38,20 +39,21 @@ def get_main_keyboard():
         ],
         [
             InlineKeyboardButton("📱 Наши соц. сети", callback_data="socials"),
-            InlineKeyboardButton("💬 Поддержка", url=SOCIAL_LINKS["support"]), # Кнопка снова здесь!
+            InlineKeyboardButton("💬 Поддержка", url=SOCIAL_LINKS["support"]),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_socials_keyboard():
-    """Клавиатура соцсетей"""
+    """Клавиатура соцсетей (Инстаграм снова в строю)"""
     keyboard = [
         [
+            InlineKeyboardButton("📷 Instagram", url=SOCIAL_LINKS["instagram"]),
             InlineKeyboardButton("📢 Telegram", url=SOCIAL_LINKS["telegram_channel"]),
-            InlineKeyboardButton("🎵 TikTok", url=SOCIAL_LINKS["tiktok"]),
         ],
         [
+            InlineKeyboardButton("🎵 TikTok", url=SOCIAL_LINKS["tiktok"]),
             InlineKeyboardButton("🎥 YouTube", url=SOCIAL_LINKS["youtube"]),
         ],
         [
@@ -209,7 +211,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     """Запуск бота"""
     if not BOT_TOKEN:
-        print("BOT_TOKEN не найден! Установите его в .env файле")
+        logger.error("BOT_TOKEN не найден! Установите его в .env файле")
         return
     
     application = Application.builder().token(BOT_TOKEN).build()
@@ -223,7 +225,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(socials_callback, pattern="^socials$"))
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))
     
-    print("Бот успешно запущен!")
+    logger.info("Бот запущен!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
