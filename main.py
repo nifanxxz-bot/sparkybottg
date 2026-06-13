@@ -58,13 +58,26 @@ def update_funds(user_id: int, balance: int, bank: int):
 
 init_db()
 
+# --- СОСТОЯНИЯ FSM ---
 class BankStates(StatesGroup):
     deposit = State()
     withdraw = State()
 
+class AdminStates(StatesGroup):
+    give_id = State()
+    give_amount = State()
+    take_id = State()
+    take_amount = State()
+    ban_id = State()
+    unban_id = State()
+
+# В памяти будем хранить состояние активных игр в мины (карты мин для юзеров)
+MINES_GAMES = {}
+
 # --- КЛАВИАТУРЫ ---
-def get_main_menu() -> InlineKeyboardMarkup:
+def get_start_menu() -> InlineKeyboardMarkup:
     kb = [
+        [InlineKeyboardButton(text="🎮 Игры", callback_data="show_games")],
         [InlineKeyboardButton(text="👤 Профиль", callback_data="profile"), InlineKeyboardButton(text="🏦 Банк", callback_data="bank_menu")],
         [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help_guide")]
     ]
@@ -73,72 +86,60 @@ def get_main_menu() -> InlineKeyboardMarkup:
 def get_back_button() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ В Меню", callback_data="to_menu")]])
 
-# --- ТЕКСТОВОЕ ГЛАВНОЕ МЕНЮ ---
-def menu_text() -> str:
-    return (
-        "🎮 **Главное меню игрового бота**\n\n"
-        "🎰 **Доступные игры (играй прямо текстом в чат):**\n"
-        "• 🎰 `казино [сумма]` — игра в кости с дилером\n"
-        "• 🎡 `рулетка [сумма] [к / ч / 0-36]` — ставки на цвета или числа\n"
-        "• 🎯 `дартс [сумма]` — бросок в мишень\n"
-        "• 🏀 `баскетбол [сумма]` — бросок в кольцо\n"
-        "• 🎳 `кегли [сумма]` — боулинг\n"
-        "• 💣 `мины [сумма]` — интерактивное минное поле\n\n"
-        "👇 Используй кнопки ниже для управления счетом:"
-    )
-
-# --- ОБРАБОТЧИКИ НАВИГАЦИИ ---
+# --- СТАРТ И НАВИГАЦИЯ ---
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     load_user(message.from_user.id, message.from_user.full_name)
-    await message.answer(menu_text(), reply_markup=get_main_menu(), parse_mode="Markdown")
+    await message.answer("👋 **Добро пожаловать в игровой бот!**\nВыбирай нужное действие в меню ниже 👇", reply_markup=get_start_menu(), parse_mode="Markdown")
 
 @router.callback_query(F.data == "to_menu")
 async def back_to_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
-    await call.message.edit_text(menu_text(), reply_markup=get_main_menu(), parse_mode="Markdown")
+    await call.message.edit_text("👋 **Главное меню игрового бота:**", reply_markup=get_start_menu(), parse_mode="Markdown")
+
+@router.callback_query(F.data == "show_games")
+async def callback_show_games(call: CallbackQuery):
+    text = (
+        "🎰 **Список доступных игр (играй текстом в чат):**\n\n"
+        "• 🎰 `казино [сумма]` — игровой автомат (3 в ряд = х15)\n"
+        "• 🎡 `рулетка [сумма] [к/ч/число]` — выигрыш числа/цвета = х15\n"
+        "• 🎯 `дартс [сумма]` — мишень (край х1, пред-центр х2.5, центр х15)\n"
+        "• 🏀 `баскетбол [сумма]` — кольцо (застрял х1, гол х15)\n"
+        "• 🎳 `кегли [сумма]` — сбей страйк\n"
+        "• 💣 `мины [сумма]` — поле 7х7, 5 опасных мин!"
+    )
+    await call.message.edit_text(text, reply_markup=get_back_button(), parse_mode="Markdown")
 
 @router.callback_query(F.data == "help_guide")
 @router.message(Command("help"))
 async def cmd_help(event: Message | CallbackQuery):
     text = (
-        "ℹ️ **Справка по командам бота**\n\n"
+        "ℹ️ **Справка по командам**\n\n"
         "💰 `б` или `баланс` — быстрый баланс и ник\n"
-        "👤 `профиль` — полная статистика аккаунта\n"
-        "👑 `/admin` — панель управления (для админов)\n\n"
-        "📋 **Примеры игровых ставок:**\n"
-        "• 🎰 `казино 5000`\n"
-        "• 🎡 `рулетка 2500 к` (к - красное, ч - черное, з - зеро, либо число 0-36)\n"
-        "• 🎯 `дартс 10000`\n"
-        "• 🏀 `баскетбол 3000`\n"
-        "• 🎳 `кегли 5000`\n"
-        "• 💣 `мины 1000`"
+        "👤 `профиль` — статистика аккаунта\n"
+        "👑 `/admin` — админ-панель\n\n"
+        "📋 **Примеры ставок:**\n"
+        "• `казино 5000`\n"
+        "• `рулетка 1000 к` (или `рулетка 1000 17`)\n"
+        "• `дартс 2000`\n"
+        "• `баскетбол 5000`"
     )
     if isinstance(event, Message): await event.answer(text, parse_mode="Markdown")
     else: await event.message.edit_text(text, reply_markup=get_back_button(), parse_mode="Markdown")
 
-# --- АДМИНКА ---
-@router.message(Command("admin"))
-async def cmd_admin(message: Message):
-    u = load_user(message.from_user.id)
-    if not u["is_admin"] and message.from_user.id != OWNER_ID:
-        await message.answer("❌ У вас нет прав для использования этой команды.")
-        return
-    await message.answer("👑 **Панель администратора**\n\nВы вошли в меню управления ботом.", reply_markup=get_back_button())
-
-# --- БАЛАНС "Б" И ПРОФИЛЬ ---
+# --- ПРОФИЛЬ И БЫСТРЫЙ БАЛАНС "Б" ---
 @router.message(F.text.lower().in_({"б", "баланс"}))
 async def quick_balance(message: Message):
     u = load_user(message.from_user.id, message.from_user.full_name)
+    if u["banned"]: return
     await message.answer(f"👤 Ник: **{u['username']}**\n💰 Баланс: **{u['balance']:,} 💵**", parse_mode="Markdown")
 
 @router.message(F.text.lower() == "профиль")
 @router.callback_query(F.data == "profile")
 async def show_profile(event: Message | CallbackQuery):
-    user_id = event.from_user.id
-    name = event.from_user.full_name
-    u = load_user(user_id, name)
-    text = f"👤 **Ваш игровой профиль**\n\n👤 Ник: {name}\n🆔 TG ID: `{user_id}`\n💰 На руках: **{u['balance']:,} 💵**\n🏦 В Банке: **{u['bank']:,} 💵**"
+    u = load_user(event.from_user.id, event.from_user.full_name)
+    if u["banned"]: return
+    text = f"👤 **Ваш игровой профиль**\n\n👤 Ник: {u['username']}\n🆔 TG ID: `{u['id']}`\n💰 На руках: **{u['balance']:,} 💵**\n🏦 В Банке: **{u['bank']:,} 💵**"
     if isinstance(event, Message): await event.answer(text, reply_markup=get_back_button(), parse_mode="Markdown")
     else: await event.message.edit_text(text, reply_markup=get_back_button(), parse_mode="Markdown")
 
@@ -155,7 +156,7 @@ async def bank_main(call: CallbackQuery):
 
 @router.callback_query(F.data == "bank_dep")
 async def bank_deposit_start(call: CallbackQuery, state: FSMContext):
-    await call.message.edit_text("📥 Введите сумму, которую хотите перевести в банк:")
+    await call.message.edit_text("📥 Введите сумму для перевода в банк:")
     await state.set_state(BankStates.deposit)
 
 @router.message(BankStates.deposit)
@@ -173,7 +174,7 @@ async def bank_deposit_proc(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "bank_with")
 async def bank_withdraw_start(call: CallbackQuery, state: FSMContext):
-    await call.message.edit_text("📤 Введите сумму, которую хотите снять из банка:")
+    await call.message.edit_text("📤 Введите сумму для снятия из банка:")
     await state.set_state(BankStates.withdraw)
 
 @router.message(BankStates.withdraw)
@@ -190,7 +191,57 @@ async def bank_withdraw_proc(message: Message, state: FSMContext):
     await message.answer(f"✅ Снято из банка: **{amount:,} 💵**", reply_markup=get_back_button(), parse_mode="Markdown")
 
 
-# --- ИГРОВАЯ ЛОГИКА ---
+# --- ПОЛНОЦЕННАЯ НАСТРОЕННАЯ АДМИНКА ---
+def get_admin_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💰 Выдать баланс", callback_data="adm_give"), InlineKeyboardButton(text="❌ Забрать баланс", callback_data="adm_take")],
+        [InlineKeyboardButton(text="🚫 Бан", callback_data="adm_ban"), InlineKeyboardButton(text="🟢 Разбан", callback_data="adm_unban")],
+        [InlineKeyboardButton(text="⬅️ Выход", callback_data="to_menu")]
+    ])
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message):
+    u = load_user(message.from_user.id)
+    if not u["is_admin"] and message.from_user.id != OWNER_ID: return
+    await message.answer("👑 **Панель Администратора**\n\nВыберите действие для управления игроками:", reply_markup=get_admin_keyboard())
+
+@router.callback_query(F.data == "adm_give")
+async def adm_give_start(call: CallbackQuery, state: FSMContext):
+    await call.message.edit_text("Введите Telegram ID игрока, кому выдать баланс:")
+    await state.set_state(AdminStates.give_id)
+
+@router.message(AdminStates.give_id)
+async def adm_give_id(message: Message, state: FSMContext):
+    await state.update_data(target_id=int(message.text))
+    await message.answer("Введите сумму для начисления:")
+    await state.set_state(AdminStates.give_amount)
+
+@router.message(AdminStates.give_amount)
+async def adm_give_amount(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+    t_user = load_user(data['target_id'])
+    update_funds(t_user['id'], t_user['balance'] + int(message.text), t_user['bank'])
+    await message.answer(f"✅ Успешно начислено {int(message.text):,} 💵 игроку `{data['target_id']}`", reply_markup=get_back_button())
+
+@router.callback_query(F.data == "adm_ban")
+async def adm_ban_start(call: CallbackQuery, state: FSMContext):
+    await call.message.edit_text("Введите ID для блокировки:")
+    await state.set_state(AdminStates.ban_id)
+
+@router.message(AdminStates.ban_id)
+async def adm_ban_proc(message: Message, state: FSMContext):
+    target = int(message.text)
+    await state.clear()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET banned = 1 WHERE id = ?", (target,))
+    conn.commit()
+    conn.close()
+    await message.answer(f"🚫 Пользователь `{target}` забанен.", reply_markup=get_back_button())
+
+
+# --- ТЕКСТОВАЯ ЛОГИКА ИГР С Х15 КОЭФФИЦИЕНТАМИ ---
 
 def parse_bet(text_parts, user_balance):
     try:
@@ -200,194 +251,211 @@ def parse_bet(text_parts, user_balance):
     except (IndexError, ValueError):
         return None
 
-# 1.🎰 Казино (Кости)
+# 1. СЛОТЫ / КАЗИНО 🎰
 @router.message(F.text.lower().startswith("казино"))
 async def txt_game_casino(message: Message):
     u = load_user(message.from_user.id, message.from_user.full_name)
+    if u["banned"]: return
     bet = parse_bet(message.text.split(), u["balance"])
     if not bet:
-        await message.answer("❌ Формат: `казино [сумма]` (не больше вашего баланса).", parse_mode="Markdown")
+        await message.answer("❌ Формат: `казино [сумма]`")
         return
 
-    p_score, d_score = random.randint(1, 6) + random.randint(1, 6), random.randint(1, 6) + random.randint(1, 6)
-    if p_score > d_score:
-        update_funds(message.from_user.id, u["balance"] + bet, u["bank"])
-        await message.answer(f"🎰 Твои очки: **{p_score}** | Дилер: **{d_score}**\n🎉 Победа! Выигрыш: **+{bet:,} 💵**", parse_mode="Markdown")
-    elif p_score < d_score:
-        update_funds(message.from_user.id, u["balance"] - bet, u["bank"])
-        await message.answer(f"🎰 Твои очки: **{p_score}** | Дилер: **{d_score}**\n📉 Проигрыш: **-{bet:,} 💵**", parse_mode="Markdown")
-    else:
-        await message.answer(f"🤝 Ничья ({p_score})! Ставка возвращена.", parse_mode="Markdown")
+    # Отправляем настоящий анимационный слот-автомат
+    msg = await message.answer_dice(emoji="🎰")
+    val = msg.dice.value
+    await asyncio.sleep(4.0)
 
-# 2.🎡 Рулетка
+    # В телеграме значения 1, 22, 43, 64 - это победные комбинации (три в ряд)
+    win_values = [1, 22, 43, 64]
+    
+    if val in win_values:
+        win_sum = bet * 15
+        update_funds(message.from_user.id, u["balance"] + (win_sum - bet), u["bank"])
+        await msg.reply(f"🎰 **ТРИ В РЯД!** Поздравляем!\n🎉 Твой выигрыш (х15): **+{win_sum:,} 💵**", parse_mode="Markdown")
+    else:
+        update_funds(message.from_user.id, u["balance"] - bet, u["bank"])
+        await msg.reply(f"💥 Комбинация не совпала. Ставка сгорела!\n📉 Потеряно: **-{bet:,} 💵**", parse_mode="Markdown")
+
+# 2. РУЛЕТКА х15
 @router.message(F.text.lower().startswith("рулетка"))
 async def txt_game_roulette(message: Message):
     u = load_user(message.from_user.id, message.from_user.full_name)
+    if u["banned"]: return
     parts = message.text.split()
     bet = parse_bet(parts, u["balance"])
     try: choice = parts[2].lower()
     except IndexError:
-        await message.answer("❌ Формат: `рулетка [сумма] [к / ч / число]`", parse_mode="Markdown")
+        await message.answer("❌ Формат: `рулетка [сумма] [к / ч / 0-36]`")
         return
 
-    if not bet:
-        await message.answer("❌ Ошибка в ставке.", parse_mode="Markdown")
-        return
+    if not bet: return
 
     spin_num = random.randint(0, 36)
     spin_color = "з" if spin_num == 0 else ("к" if spin_num % 2 == 0 else "ч")
-    win = False
-    multiplier = 2
     
+    win = False
     if choice in ["к", "красное"] and spin_color == "к": win = True
     elif choice in ["ч", "черное"] and spin_color == "ч": win = True
-    elif choice in ["з", "зеро"] and spin_color == "з": win = True; multiplier = 35
-    elif choice.isdigit() and int(choice) == spin_num: win = True; multiplier = 35
+    elif choice.isdigit() and int(choice) == spin_num: win = True
 
-    res_full = f"{spin_num} ({'🔴' if spin_color=='к' else '⚫' if spin_color=='ч' else '🟢'})"
+    res_emoji = "🔴" if spin_color == "к" else "⚫" if spin_color == "ч" else "🟢"
     if win:
-        update_funds(message.from_user.id, u["balance"] + (bet * (multiplier - 1)), u["bank"])
-        await message.answer(f"🎡 Выпало: **{res_full}**\n🎉 Угадал! Выигрыш: **+{bet*multiplier:,} 💵**", parse_mode="Markdown")
+        win_sum = bet * 15
+        update_funds(message.from_user.id, u["balance"] + (win_sum - bet), u["bank"])
+        await message.answer(f"🎡 Выпало: **{spin_num} {res_emoji}**\n🎉 Идеальное попадание! Выигрыш (х15): **+{win_sum:,} 💵**", parse_mode="Markdown")
     else:
         update_funds(message.from_user.id, u["balance"] - bet, u["bank"])
-        await message.answer(f"🎡 Выпало: **{res_full}**\n📉 Минус **{bet:,} 💵**", parse_mode="Markdown")
+        await message.answer(f"🎡 Выпало: **{spin_num} {res_emoji}**\n📉 Не угадал, ставка сгорела: **-{bet:,} 💵**", parse_mode="Markdown")
 
-# 3.🎯 Дартс / 🏀 Баскетбол / 🎳 Кегли
+# 3. ДАРТС, БАСКЕТБОЛ, КЕГЛИ С КАСТОМНЫМИ МНОЖИТЕЛЯМИ
 @router.message(F.text.lower().startswith(("дартс", "баскетбол", "кегли")))
-async def txt_game_dice(message: Message):
+async def txt_interactive_dice(message: Message):
     u = load_user(message.from_user.id, message.from_user.full_name)
+    if u["banned"]: return
     parts = message.text.split()
     game = parts[0].lower()
     bet = parse_bet(parts, u["balance"])
-    if not bet:
-        await message.answer(f"❌ Формат: `{game} [сумма]`", parse_mode="Markdown")
-        return
+    if not bet: return
 
     emoji_map = {"дартс": "🎯", "баскетбол": "🏀", "кегли": "🎳"}
     msg = await message.answer_dice(emoji=emoji_map[game])
     val = msg.dice.value
-    await asyncio.sleep(3.5)
+    await asyncio.sleep(4.0)
 
-    win_min = 3 if game == "кегли" else 4
-    if val >= win_min:
-        update_funds(message.from_user.id, u["balance"] + bet, u["bank"])
-        await msg.reply(f"🎉 Результат: {val}! Ты выиграл: **+{bet:,} 💵**", parse_mode="Markdown")
+    mult = 0
+    desc = ""
+
+    if game == "дартс":
+        if val == 1: mult = 0; desc = "Мимо мишени!"
+        elif val in [2, 3]: mult = 1.0; desc = "Самый дальний круг (х1)"
+        elif val in [4, 5]: mult = 2.5; desc = "Предпоследний круг (х2.5)"
+        elif val == 6: mult = 15.0; desc = "🎯 ЧИСТОЕ ПОПАДАНИЕ В ЦЕНТР! (х15)"
+        
+    elif game == "баскетбол":
+        if val in [1, 2]: mult = 0; desc = "Мимо кольца!"
+        elif val == 3: mult = 1.0; desc = "🏀 Мяч застрял на кольце! Фол (х1)"
+        elif val in [4, 5, 6]: mult = 15.0; desc = "💥 ЧИСТЫЙ ГОЛ! (х15)"
+
+    elif game == "кегли":
+        if val == 1: mult = 0; desc = "Мимо всех кегль!"
+        elif val in [2, 3, 4]: mult = 1.5; desc = "Сбито несколько кегль (х1.5)"
+        elif val in [5, 6]: mult = 15.0; desc = "🎳 СТРАЙК! Все кегли сбиты (х15)"
+
+    if mult > 0:
+        win_sum = int(bet * mult)
+        update_funds(message.from_user.id, u["balance"] + (win_sum - bet), u["bank"])
+        await msg.reply(f"{desc}\n🎉 Твой выигрыш: **+{win_sum:,} 💵**", parse_mode="Markdown")
     else:
-        update_funds(message.from_user.id, u["balance"] - bet, u.get("bank", 0))
-        await msg.reply(f"📉 Не повезло, результат: {val}. Минус **{bet:,} 💵**", parse_mode="Markdown")
+        update_funds(message.from_user.id, u["balance"] - bet, u["bank"])
+        await msg.reply(f"{desc}\n📉 Ставка сгорела полностью! **-{bet:,} 💵**", parse_mode="Markdown")
 
 
-# --- 4.💣 ИНТЕРАКТИВНЫЕ МИНЫ (ИНЛАЙН КНОПКИ) ---
+# --- 4. 💣 ИНТЕРАКТИВНЫЕ МИНЫ 7х7 (5 МИН) ---
 
-def generate_mines_keyboard(bet: int, opened_cells=None, game_over=False, won=False):
-    if opened_cells is None: opened_cells = []
-    inline_keyboard = []
+def get_mines_kb(user_id, bet, game_over=False, won=False):
+    game = MINES_GAMES[user_id]
+    opened = game["opened"]
+    mines = game["mines"]
     
-    # Сетка 3x3 для удобства на мобилках
-    for row in range(3):
-        row_buttons = []
-        for col in range(3):
-            cell_id = f"{row}_{col}"
-            if cell_id in opened_cells:
+    kb = []
+    # Сетка 7 на 7
+    for r in range(7):
+        row_btns = []
+        for c in range(7):
+            cell = f"{r}_{c}"
+            if cell in opened:
                 text = "💎"
-            elif game_over and cell_id not in opened_cells:
-                text = "💥" if cell_id in ["0_1", "1_2", "2_0"] else "🔹" # Пример фиксированных мин
+            elif game_over and cell in mines:
+                text = "💥"
             else:
                 text = "❓"
                 
-            callback_data = "ignore" if game_over or won or cell_id in opened_cells else f"mine_click:{cell_id}:{bet}"
-            row_buttons.append(InlineKeyboardButton(text=text, callback_data=callback_data))
-        inline_keyboard.append(row_buttons)
+            cb = "ignore" if game_over or won or cell in opened else f"m_play:{r}:{c}"
+            row_btns.append(InlineKeyboardButton(text=text, callback_data=cb))
+        kb.append(row_btns)
         
-    if not game_over and not won and len(opened_cells) > 0:
-        inline_keyboard.append([InlineKeyboardButton(text="💰 Забрать деньги", callback_data=f"mine_take:{bet}:{len(opened_cells)}")])
+    if not game_over and not won and len(opened) > 0:
+        kb.append([InlineKeyboardButton(text="💰 Забрать деньги", callback_data="m_take")])
     else:
-        inline_keyboard.append([InlineKeyboardButton(text="⬅️ В Меню", callback_data="to_menu")])
+        kb.append([InlineKeyboardButton(text="⬅️ Главное Меню", callback_data="to_menu")])
         
-    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 @router.message(F.text.lower().startswith("мины"))
 async def txt_game_mines(message: Message):
     u = load_user(message.from_user.id, message.from_user.full_name)
+    if u["banned"]: return
     bet = parse_bet(message.text.split(), u["balance"])
     if not bet:
-        await message.answer("❌ Формат: `мины [сумма]`", parse_mode="Markdown")
+        await message.answer("❌ Формат: `мины [сумма]`")
         return
 
-    # Списываем ставку сразу перед началом игры
+    # Генерируем 5 случайных мин на поле 7х7
+    all_cells = [f"{r}_{c}" for r in range(7) for c in range(7)]
+    mines = random.sample(all_cells, 5)
+    
+    MINES_GAMES[message.from_user.id] = {
+        "bet": bet,
+        "mines": mines,
+        "opened": []
+    }
+    
     update_funds(message.from_user.id, u["balance"] - bet, u["bank"])
-    
     await message.answer(
-        f"💣 **Игра Мины начата!**\n💰 Ставка: **{bet:,} 💵**\n\nНайдите алмазы 💎 и не подорвитесь на минах. На поле 3 мины!",
-        reply_markup=generate_mines_keyboard(bet),
+        f"💣 **МИНЫ 7х7 НАЧАТЫ!**\n💰 Ставка: **{bet:,} 💵**\nНа поле спрятано **5 мин**. Открывайте клетки ❓!",
+        reply_markup=get_mines_kb(message.from_user.id, bet),
         parse_mode="Markdown"
     )
 
-@router.callback_query(F.data.startswith("mine_click:"))
-async def mine_click_proc(call: CallbackQuery):
-    _, cell_id, bet = call.data.split(":")
-    bet = int(bet)
-    u = load_user(call.from_user.id)
+@router.callback_query(F.data.startswith("m_play:"))
+async def mine_game_click(call: CallbackQuery):
+    u_id = call.from_user.id
+    if u_id not in MINES_GAMES: return
     
-    # 3 фиксированные мины на поле 3x3
-    mines = ["0_1", "1_2", "2_0"]
+    _, r, c = call.data.split(":")
+    cell = f"{r}_{c}"
+    game = MINES_GAMES[u_id]
     
-    # Восстанавливаем список открытых клеток из структуры текста кнопок
-    opened_cells = []
-    for row in call.message.reply_markup.inline_keyboard[:3]:
-        for btn in row:
-            if btn.text == "💎":
-                # Находим по callback или генерируем позицию заново
-                pass
-
-    # Для простоты отслеживания добавим текущую клетку в условный список
-    # (В реальном стейте лучше хранить в FSM, но для одного файла сделаем легкую симуляцию текста)
-    if cell_id in mines:
-        # Проигрыш
-        await call.message.edit_text(
-            f"💥 **БУМ! Вы подорвались на мине!**\n📉 Потеряно: **-{bet:,} 💵**",
-            reply_markup=generate_mines_keyboard(bet, game_over=True)
-        )
+    if cell in game["mines"]:
+        # Подорвался
+        await call.message.edit_text(f"💥 **БУМ! Вы наступили на мину!**\n📉 Ставка **{game['bet']:,} 💵** полностью сгорела.", reply_markup=get_mines_kb(u_id, game['bet'], game_over=True))
+        MINES_GAMES.pop(u_id, None)
     else:
-        # Успешное открытие (для примера считаем текущую открытой)
-        fake_opened = ["0_0"] if not opened_cells else opened_cells
-        fake_opened.append(cell_id)
-        fake_opened = list(set(fake_opened)) # Убираем дубликаты
-        
-        # Если открыл все чистые клетки (их всего 6 из 9)
-        if len(fake_opened) >= 6:
-            win = int(bet * 3.0)
-            update_funds(call.from_user.id, u["balance"] + win, u["bank"])
-            await call.message.edit_text(
-                f"🎉 **ИДЕАЛЬНО!** Вы открыли все чистые клетки!\n💰 Выигрыш: **+{win:,} 💵**",
-                reply_markup=generate_mines_keyboard(bet, opened_cells=fake_opened, won=True)
-            )
+        game["opened"].append(cell)
+        # Если чудом открыл все чистые клетки (44 штуки)
+        if len(game["opened"]) >= 44:
+            win_sum = game["bet"] * 15
+            u = load_user(u_id)
+            update_funds(u_id, u["balance"] + win_sum, u["bank"])
+            await call.message.edit_text(f"🏆 **НЕВЕРОЯТНО!** Вы зачистили поле!\n🎉 Выигрыш (х15): **+{win_sum:,} 💵**", reply_markup=get_mines_kb(u_id, game['bet'], won=True))
+            MINES_GAMES.pop(u_id, None)
         else:
-            await call.message.edit_reply_markup(reply_markup=generate_mines_keyboard(bet, opened_cells=fake_opened))
+            await call.message.edit_reply_markup(reply_markup=get_mines_kb(u_id, game['bet']))
 
-@router.callback_query(F.data.startswith("mine_take:"))
-async def mine_take_money(call: CallbackQuery):
-    _, bet, count = call.data.split(":")
-    bet, count = int(bet), int(count)
-    u = load_user(call.from_user.id)
+@router.callback_query(F.data == "m_take")
+async def mine_game_take(call: CallbackQuery):
+    u_id = call.from_user.id
+    if u_id not in MINES_GAMES: return
     
-    # Прогрессивный множитель за каждую открытую клетку
-    multipliers = {1: 1.2, 2: 1.5, 3: 2.0, 4: 2.5, 5: 3.0, 6: 4.0}
-    mult = multipliers.get(count, 1.2)
-    win = int(bet * mult)
+    game = MINES_GAMES[u_id]
+    count = len(game["opened"])
     
-    update_funds(call.from_user.id, u["balance"] + win, u["bank"])
-    await call.message.edit_text(
-        f"💰 **Вы успешно забрали деньги!**\n💎 Открыто клеток: {count}\n🎉 Выигрыш: **+{win:,} 💵**",
-        reply_markup=get_back_button(),
-        parse_mode="Markdown"
-    )
+    # Плавный повышающийся коэффициент за количество открытых ячеек на поле 7х7
+    coef = 1.0 + (count * 0.25)
+    win_sum = int(game["bet"] * coef)
+    
+    u = load_user(u_id)
+    update_funds(u_id, u["balance"] + win_sum, u["bank"])
+    
+    await call.message.edit_text(f"💰 **Деньги успешно забраны!**\n💎 Вы открыли ячеек: {count}\n🎉 Множитель: x{coef:.2f}\n💵 Зачислено: **+{win_sum:,} 💵**", reply_markup=get_back_button(), parse_mode="Markdown")
+    MINES_GAMES.pop(u_id, None)
 
 
-# --- СТАРТ БОТА ---
+# --- СТАРТ ---
 async def main():
     dp.include_router(router)
-    print("🚀 Бот с интерактивными Минами и эмодзи успешно запущен!")
+    print("🚀 Новая сборка с Казино 🎰, Минами 7х7 и х15 коэффами активна!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
