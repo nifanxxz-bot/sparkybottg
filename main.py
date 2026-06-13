@@ -26,7 +26,7 @@ SOCIAL_LINKS = {
     "tiktok": "https://tiktok.com",          
     "youtube": "https://youtube.com",        
     # Прямая команда для Telegram открыть почтовое приложение без сайтов-прокладок
-    "support": "mailto:supportsparkyai@gmail.com", 
+    "support": "https://mailto:supportsparkyai@gmail.com", 
 }
 
 
