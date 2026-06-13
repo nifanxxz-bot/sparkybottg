@@ -21,11 +21,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 # Конфигурация ссылок
 SOCIAL_LINKS = {
     "website": "http://sparky-b6d71.web.app",
-    "instagram": "https://instagram.com/your_profile",
-    "telegram_channel": "https://t.me/your_channel",
-    "tiktok": ""https://t.me/your_channel",
-    "youtube": "https://youtube.com/@your_channel",
-    "support": "supportsparkyai@gmail.com",
+    "telegram_channel": "https://t.me/sparky_industry",
+    "tiktok": "https://tiktok.com",          # Замените на вашу ссылку, когда появится
+    "youtube": "https://youtube.com",        # Замените на вашу ссылку, когда появится
+    "support": "mailto:supportsparkyai@gmail.com",  # mailto: обязателен для корректной работы кнопки
 }
 
 
@@ -48,11 +47,10 @@ def get_socials_keyboard():
     """Клавиатура соцсетей"""
     keyboard = [
         [
-            InlineKeyboardButton("📷 Instagram", url=SOCIAL_LINKS["instagram"]),
             InlineKeyboardButton("📢 Telegram", url=SOCIAL_LINKS["telegram_channel"]),
+            InlineKeyboardButton("🎵 TikTok", url=SOCIAL_LINKS["tiktok"]),
         ],
         [
-            InlineKeyboardButton("🎵 Tiktok", url=SOCIAL_LINKS["tiktok"]),
             InlineKeyboardButton("🎥 YouTube", url=SOCIAL_LINKS["youtube"]),
         ],
         [
