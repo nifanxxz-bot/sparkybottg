@@ -14,22 +14,23 @@ load_dotenv()
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-logger = logging.getLogger(__name__)
+logger = __name__
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Конфигурация ссылок
+# Используем веб-редирект для почты, чтобы Telegram пропускал ссылку и открывал почтовый клиент у пользователя
 SOCIAL_LINKS = {
     "website": "http://sparky-b6d71.web.app",
     "telegram_channel": "https://t.me/sparky_industry",
-    "tiktok": "https://tiktok.com",          # Замените на вашу ссылку, когда появится
-    "youtube": "https://youtube.com",        # Замените на вашу ссылку, когда появится
-    "support": "mailto:supportsparkyai@gmail.com",  # mailto: обязателен для корректной работы кнопки
+    "tiktok": "https://tiktok.com",          
+    "youtube": "https://youtube.com",        
+    "support": "https://mailgo.dev/mailto/supportsparkyai@gmail.com", # Теперь это валидный HTTPS URL!
 }
 
 
 def get_main_keyboard():
-    """Главное меню с красивыми кнопками"""
+    """Главное меню с кнопкой Поддержки (Email)"""
     keyboard = [
         [
             InlineKeyboardButton("ℹ️ О нас", callback_data="about"),
@@ -37,7 +38,7 @@ def get_main_keyboard():
         ],
         [
             InlineKeyboardButton("📱 Наши соц. сети", callback_data="socials"),
-            InlineKeyboardButton("💬 Поддержка", url=SOCIAL_LINKS["support"]),
+            InlineKeyboardButton("💬 Поддержка", url=SOCIAL_LINKS["support"]), # Кнопка снова здесь!
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -208,7 +209,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     """Запуск бота"""
     if not BOT_TOKEN:
-        logger.error("BOT_TOKEN не найден! Установите его в .env файле")
+        print("BOT_TOKEN не найден! Установите его в .env файле")
         return
     
     application = Application.builder().token(BOT_TOKEN).build()
@@ -222,9 +223,10 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(socials_callback, pattern="^socials$"))
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))
     
-    logger.info("Бот запущен!")
+    print("Бот успешно запущен!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
     main()
+    
