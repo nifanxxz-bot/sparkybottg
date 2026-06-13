@@ -20,12 +20,12 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Конфигурация ссылок
 SOCIAL_LINKS = {
-    "website": "https://your-website.com",
+    "website": "http://sparky-b6d71.web.app",
     "instagram": "https://instagram.com/your_profile",
     "telegram_channel": "https://t.me/your_channel",
-    "vk": "https://vk.com/your_group",
+    "tiktok": ""https://t.me/your_channel",
     "youtube": "https://youtube.com/@your_channel",
-    "support": "https://t.me/your_support",
+    "support": "supportsparkyai@gmail.com",
 }
 
 
@@ -52,7 +52,7 @@ def get_socials_keyboard():
             InlineKeyboardButton("📢 Telegram", url=SOCIAL_LINKS["telegram_channel"]),
         ],
         [
-            InlineKeyboardButton("🎵 VK", url=SOCIAL_LINKS["vk"]),
+            InlineKeyboardButton("🎵 Tiktok", url=SOCIAL_LINKS["tiktok"]),
             InlineKeyboardButton("🎥 YouTube", url=SOCIAL_LINKS["youtube"]),
         ],
         [
