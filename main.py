@@ -7,7 +7,7 @@ from aiogram.filters import Command
 
 # =====================================================================
 # ВСТАВЬ СВОЙ ТОКЕН СЮДА:
-BOT_TOKEN = "8999022213:AAHlLNRC0iDgSljIWzvLnB-FMHjefFGsiJw"
+BOT_TOKEN = "8336283371:AAHkQcpRt3OPtJ52h98aOMhd4aIy2Mn1ZgM"
 # =====================================================================
 
 bot = Bot(token=BOT_TOKEN)
