@@ -50,7 +50,7 @@ ISLANDS = [
     {"name": "Виски Пик", "mult": 3.0, "boss": "Мистер 5"},
     {"name": "Алабаста", "mult": 4.5, "boss": "Крокодайл"},
     {"name": "Скайпия", "mult": 6.0, "boss": "Энель"},
-    {"name": "Эниес Лобби", "mult": 8.0, "boss": "Роб Луччи"},
+    {"name": "Эниес Lобби", "mult": 8.0, "boss": "Роб Луччи"},
     {"name": "Маринфорд", "mult": 11.0, "boss": "Акаину"},
     {"name": "Дресс Роза", "mult": 15.0, "boss": "Дофламинго"},
     {"name": "Вано (Новый Мир)", "mult": 22.0, "boss": "Кайдо"}
@@ -212,7 +212,7 @@ async def change_fraction(call: CallbackQuery):
 async def change_name_msg(message: Message):
     p = get_player(message.from_user.id)
     if p:
-        p['name'] = message.text[:20] # ограничение 20 символов
+        p['name'] = message.text[:20]
         update_player(p)
         await message.answer(f"Status: Ваше имя изменено на **{p['name']}**!", parse_mode="Markdown")
 
@@ -325,7 +325,6 @@ async def island_fight(call: CallbackQuery):
     is_boss = (stage == 9)
     enemy_name = island['boss'] if is_boss else f"Пират островов {stage}"
     
-    # Расчет статов врага
     if is_boss:
         e_hp = int(60 * island['mult'] * 2.5)
         e_atk = int(8 * island['mult'] * 1.8)
@@ -333,7 +332,6 @@ async def island_fight(call: CallbackQuery):
         e_hp = int(40 * island['mult'] * (1 + stage * 0.1))
         e_atk = int(6 * island['mult'] * (1 + stage * 0.05))
         
-    # СИМУЛЯЦИЯ БОЯ НА СЕРВЕРЕ (Пошагово за один клик, чтобы не спамить кнопками)
     p_hp = get_max_hp(p)
     p_atk = get_total_atk(p)
     
@@ -354,13 +352,12 @@ async def island_fight(call: CallbackQuery):
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 На Острова", callback_query_data="menu_islands")]])
         await call.message.edit_text(battle_log, reply_markup=kb, parse_mode="Markdown")
     else:
-        # Победа
         gold_reward = int(25 * island['mult'])
         exp_reward = int(20 * island['mult'])
         
         if is_boss:
             gold_reward += int(150 * island['mult'])
-            p['base_hp'] += int(10 * island['mult']) # Перманентное ХП за босса
+            p['base_hp'] += int(10 * island['mult'])
             battle_log += f"🏆 **БОСС ОДОЛЕН!** Остров полностью зачищен!\n❤️ Макс. HP увеличено навсегда!"
             if p['unlocked_island'] == isl_idx and p['unlocked_island'] < len(ISLANDS) - 1:
                 p['unlocked_island'] += 1
@@ -379,9 +376,13 @@ async def island_fight(call: CallbackQuery):
         await call.message.edit_text(battle_log, reply_markup=kb, parse_mode="Markdown")
 
 async def main():
+    # ЛИНЕЙКА ИСПРАВЛЕНИЯ КОНФЛИКТА ВЕБХУКА:
+    # Удаляет активные вебхуки и сбрасывает накопившуюся очередь сообщений перед стартом Polling.
+    await bot.delete_webhook(drop_pending_updates=True)
+    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
+                                
     
