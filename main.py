@@ -6,7 +6,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from aiogram.filters import Command
 
 # =====================================================================
-# ВСТАВЬ СВОЙ ТОКЕН СЮДА:
+# ТОКЕН УСТАНОВЛЕН СЮДА
 BOT_TOKEN = "8336283371:AAHkQcpRt3OPtJ52h98aOMhd4aIy2Mn1ZgM"
 # =====================================================================
 
@@ -50,7 +50,7 @@ ISLANDS = [
     {"name": "Виски Пик", "mult": 3.0, "boss": "Мистер 5"},
     {"name": "Алабаста", "mult": 4.5, "boss": "Крокодайл"},
     {"name": "Скайпия", "mult": 6.0, "boss": "Энель"},
-    {"name": "Эниес Lобби", "mult": 8.0, "boss": "Роб Луччи"},
+    {"name": "Эниес Лобби", "mult": 8.0, "boss": "Роб Луччи"},
     {"name": "Маринфорд", "mult": 11.0, "boss": "Акаину"},
     {"name": "Дресс Роза", "mult": 15.0, "boss": "Дофламинго"},
     {"name": "Вано (Новый Мир)", "mult": 22.0, "boss": "Кайдо"}
@@ -121,13 +121,17 @@ def check_lvl_up(p):
         return True
     return False
 
-# --- КЛАВИАТУРЫ ---
+# --- СТРОГО INLINE КЛАВИАТУРА ДЛЯ ГЛАВНОГО МЕНЮ (ИСПРАВЛЕНО) ---
 def main_menu_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺️ Острова", callback_query_data="menu_islands"),
-         InlineKeyboardButton(text="🛒 Магазин", callback_query_data="menu_shop")],
-        [InlineKeyboardButton(text="⚙️ Настройки/Прокачка", callback_query_data="menu_settings"),
-         InlineKeyboardButton(text="📜 Помощь", callback_query_data="menu_help")]
+        [
+            InlineKeyboardButton(text="🗺️ Острова", callback_query_data="menu_islands"),
+            InlineKeyboardButton(text="🛒 Магазин", callback_query_data="menu_shop")
+        ],
+        [
+            InlineKeyboardButton(text="⚙️ Настройки/Прокачка", callback_query_data="menu_settings"),
+            InlineKeyboardButton(text="📜 Помощь", callback_query_data="menu_help")
+        ]
     ])
 
 # --- ХЕНДЛЕРЫ ---
@@ -376,13 +380,10 @@ async def island_fight(call: CallbackQuery):
         await call.message.edit_text(battle_log, reply_markup=kb, parse_mode="Markdown")
 
 async def main():
-    # ЛИНЕЙКА ИСПРАВЛЕНИЯ КОНФЛИКТА ВЕБХУКА:
-    # Удаляет активные вебхуки и сбрасывает накопившуюся очередь сообщений перед стартом Polling.
+    # Автоматически сбрасываем старый вебхук и чистим кэш
     await bot.delete_webhook(drop_pending_updates=True)
-    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-                                
     
